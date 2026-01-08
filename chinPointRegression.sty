@@ -1,0 +1,62 @@
+so for annotations:
+
+general purpose architecture:
+
+def tr
+
+
+
+my current underdstasnding of ho wpytorch dataloader works:
+
+
+class dataset:
+    so its a big class that general centers on:
+    init --> arbitrary computations of your choice if you override. Does overriding init, as we so often do with our custom init definitions
+    when defining a dataset, override the default init function that would run on a default stock dataset in torhc?
+    defeault noralization and data cleanig, like iterating htrough a folder and loading up data into a ready format
+    like making a huge tensor out of the images and then indexxing into it and sampling parts based on batchsize for instance
+    and scaling or augmenting the data; seems it should be done in init, loaded into a huge tensor,
+    and then served via __getitem__(idx) as needed
+
+
+#works for arbitrarily sized images.    
+class chinPointDataset(dataset):
+    def __init__(self, imageFolder, annotFile, idealWidth, idealHeight): #idealsize
+    this.annotFile = annotFile
+    this.imageFolder = imageFolder  
+    this.size = 0  
+    
+    with open(imageFolder, 'r') as f:
+        for image in os.listdir(imageFolder):
+            if(image.endswith(".png")):
+                this.size+=1
+
+    #open json:
+    with json.open(annotFile, 'r') as f:
+    now have it as json object=jsonAnnot
+    
+
+
+    this.allImgsArray = numpy.zeroes([count,idealWidth,idealHeight])
+    this.allAnnotsArray = numpy.zeroes([count,2]) 
+    with open(imageFolder, 'r') as f:
+        for idx,image in zip(os.listdir(imageFolder)):
+            if(image.endswith(".png")):            
+                imgArr = cv2.imread(os.path.join(imageFolder,image))
+                height,width,channels = imgArr.shape
+                imgArr = cv.cvtColor(imgArr,cv2.COLOR_BGR2GRAY)
+                imgArr = cv.resize(imgArr,None,fx=idealWidth,fy=idealHeight)
+                this.allAnnotsArray[idx] = [jsonAnnot[idx][0]*(idealWidth/width),jsonAnnot[idx][1]*(idealHeight/height) #(each entry is in format "xxxxxx.png", starting at 000001))
+          
+
+
+
+    
+        
+                    
+    def __len__():
+        return size
+
+    def getitem__():
+        get the pickings, and then sample the same indices from the allImgsAray and from the allAnnotsArray
+        sample from this.allImgsArray with batch amount as usual, and 
