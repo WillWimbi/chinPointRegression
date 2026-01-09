@@ -1,0 +1,1 @@
+This is a project I worked on over the summer when I was first learning about neural networks; the directory was bloated with tons of testing and oneoff scripts so I am cleaning it up and putting a more barebones version here
