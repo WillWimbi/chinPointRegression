@@ -1,0 +1,4 @@
+{
+    "rawImgsNum": 2675,
+    "outputIter": 2439
+}
