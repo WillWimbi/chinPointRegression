@@ -38,11 +38,11 @@ def onKeyPress(keyPress):
 WaitTime = 0
 keyboard.hook(onKeyPress)
 stopNum = 108
-dataDir = r"C:\Will SSD Primary Files\CS 2024 (with python stuff)\Programming 2024\6.18.24 FaceGen\textDescr"
+dataDir = "textDescr"
 Item = None
 Name = ""
 lenDataDir = os.listdir(dataDir)
-def orderImgs(folder_path):
+def orderImgs(folder_path): 
     global stopNum
     global Name
         # Loop through all items in the directory

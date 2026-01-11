@@ -1,14 +1,100 @@
 import torch
-import numpy as np
-import torch.nn as nn
-import torch.optim as optim
-import cv2
-import json
-import os
-import time #for tracking
-from datetime import datetime
-import matplotlib.pyplot as plt
-from torch.utils.data import Dataset, DataLoader
+load model weights from checkpoint --> modelCheckpoints/epoch_950.pth
+
+class chinPointNet(nn.Module):
+    def __init__(self):
+        super().__init__()
+        
+        # Stem: 1 -> 32 channels, keep spatial size
+        self.conv1 = nn.Conv2d(1, 32, kernel_size=3, padding=1)
+        self.bn1 = nn.BatchNorm2d(32)
+        
+        # Block 1: 32 -> 64 channels
+        self.conv2a = nn.Conv2d(32, 64, kernel_size=3, padding=1)
+        self.bn2a = nn.BatchNorm2d(64)
+        self.conv2b = nn.Conv2d(64, 64, kernel_size=3, padding=1)
+        self.bn2b = nn.BatchNorm2d(64)
+        self.skip2 = nn.Conv2d(32, 64, kernel_size=1)  # 1x1 conv to match channels
+        
+        # Block 2: 64 -> 128 channels
+        self.conv3a = nn.Conv2d(64, 128, kernel_size=3, padding=1)
+        self.bn3a = nn.BatchNorm2d(128)
+        self.conv3b = nn.Conv2d(128, 128, kernel_size=3, padding=1)
+        self.bn3b = nn.BatchNorm2d(128)
+        self.skip3 = nn.Conv2d(64, 128, kernel_size=1)
+        
+        # Block 3: 128 -> 256 channels
+        self.conv4a = nn.Conv2d(128, 256, kernel_size=3, padding=1)
+        self.bn4a = nn.BatchNorm2d(256)
+        self.conv4b = nn.Conv2d(256, 256, kernel_size=3, padding=1)
+        self.bn4b = nn.BatchNorm2d(256)
+        self.skip4 = nn.Conv2d(128, 256, kernel_size=1)
+        
+        # Block 4: 256 -> 512 channels
+        self.conv5a = nn.Conv2d(256, 512, kernel_size=3, padding=1)
+        self.bn5a = nn.BatchNorm2d(512)
+        self.conv5b = nn.Conv2d(512, 512, kernel_size=3, padding=1)
+        self.bn5b = nn.BatchNorm2d(512)
+        self.skip5 = nn.Conv2d(256, 512, kernel_size=1)
+        
+        self.pool = nn.MaxPool2d(2, 2)
+        self.relu = nn.ReLU()
+        
+        # Adaptive pooling: no matter the spatial size, output is [B, 512, 1, 1]
+        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
+        
+        # Head
+        self.fc1 = nn.Linear(512, 256)
+        self.dropout = nn.Dropout(0.2)
+        self.fc2 = nn.Linear(256, 2)
+        
+        # Initialize final layer small (helps regression converge)
+        nn.init.normal_(self.fc2.weight, mean=0, std=0.001)
+        nn.init.constant_(self.fc2.bias, 0)
+    
+    def forward(self, x):
+        # Stem: [B, 1, 96, 96] -> [B, 32, 96, 96] -> pool -> [B, 32, 48, 48]
+        x = self.pool(self.relu(self.bn1(self.conv1(x))))
+        
+        # Block 1 with residual: [B, 32, 48, 48] -> [B, 64, 48, 48] -> pool -> [B, 64, 24, 24]
+        identity = self.skip2(x)
+        x = self.relu(self.bn2a(self.conv2a(x)))
+        x = self.bn2b(self.conv2b(x))
+        x = self.relu(x + identity)
+        x = self.pool(x)
+        
+        # Block 2 with residual: [B, 64, 24, 24] -> [B, 128, 24, 24] -> pool -> [B, 128, 12, 12]
+        identity = self.skip3(x)
+        x = self.relu(self.bn3a(self.conv3a(x)))
+        x = self.bn3b(self.conv3b(x))
+        x = self.relu(x + identity)
+        x = self.pool(x)
+        
+        # Block 3 with residual: [B, 128, 12, 12] -> [B, 256, 12, 12] -> pool -> [B, 256, 6, 6]
+        identity = self.skip4(x)
+        x = self.relu(self.bn4a(self.conv4a(x)))
+        x = self.bn4b(self.conv4b(x))
+        x = self.relu(x + identity)
+        x = self.pool(x)
+        
+        # Block 4 with residual: [B, 256, 6, 6] -> [B, 512, 6, 6] -> pool -> [B, 512, 3, 3]
+        identity = self.skip5(x)
+        x = self.relu(self.bn5a(self.conv5a(x)))
+        x = self.bn5b(self.conv5b(x))
+        x = self.relu(x + identity)
+        x = self.pool(x)
+        
+        # Global average pool: [B, 512, 3, 3] -> [B, 512, 1, 1]
+        x = self.avgpool(x)
+        
+        # Flatten and head: [B, 512] -> [B, 256] -> [B, 2]
+        x = x.view(x.size(0), -1)
+        x = self.dropout(self.relu(self.fc1(x)))
+        x = self.fc2(x)
+        
+        return x
+
+run model through test dataset: 
 
 class chinPointDataset(Dataset):
     def __init__(self, imageFolder, annotFile, idealWidth, idealHeight):
@@ -86,80 +172,7 @@ class chinPointDataset(Dataset):
             return img, annot
         else:
             return img
-        
 
-class chinPointNet(nn.Module):
-    def __init__(self,ks=3):
-        super().__init__()
-        # simple conv stack -> regression head
-        # input: [batch, 1, 96, 96]
-        self.conv1 = nn.Conv2d(1, 32, kernel_size=ks, padding=1)
-        self.bn1 = nn.BatchNorm2d(32)
-        self.conv2 = nn.Conv2d(32, 64, kernel_size=ks, padding=1)
-        self.bn2 = nn.BatchNorm2d(64)
-        self.conv3 = nn.Conv2d(64, 128, kernel_size=ks, padding=1)
-        self.bn3 = nn.BatchNorm2d(128)
-        self.pool = nn.MaxPool2d(2, 2)
-        self.relu = nn.ReLU()
-        
-        # after 3 pools: 96 -> 48 -> 24 -> 12
-        # so final feature map is [batch, 128, 12, 12]
-        self.fc1 = nn.Linear(128 * 12 * 12, 256)
-
-        self.fc2 = nn.Linear(256, 2)  # output: [batch, 2] for (x, y)
-    
-    def forward(self, x):
-        x = self.pool(self.relu(self.bn1(self.conv1(x))))
-        x = self.pool(self.relu(self.bn2(self.conv2(x))))
-        x = self.pool(self.relu(self.bn3(self.conv3(x))))
-        x = x.view(x.size(0), -1)  # flatten
-        x = self.relu(self.fc1(x))
-        x = self.fc2(x)
-        return x
-def lrScheduler(baseLr, i):
-    # formula: scales down, 10% of orig at 500 iters, 1% at 1000
-    return baseLr * (10 ** (-i / 1000))
-
-imageFolder = "Imgs"
-annotFile = "Imgs_Annotate.json"
-testImageFolder = "testImgs"
-idealWidth = 96
-idealHeight = 96
-trainChinPointDataset = chinPointDataset(imageFolder, annotFile, idealWidth, idealHeight)
-testChinPointDataset = chinPointDataset(testImageFolder, None, idealWidth, idealHeight)
-dataloader = DataLoader(
-    trainChinPointDataset,
-    batch_size=256,
-    shuffle=True,
-    drop_last=True,
-    num_workers=0,              # ✅ Parallel data loading
-    pin_memory=True,            # ✅ CRITICAL for fast GPU transfer!
-    persistent_workers=False     # ✅ Reuse workers across epochs
-)
-testDataloader = DataLoader(
-    testChinPointDataset,
-    batch_size=36,
-    shuffle=True,
-    drop_last=True,
-    num_workers=0,
-    pin_memory=True,
-    persistent_workers=False
-)
-# Initialize model ON GPU
-model = chinPointNet().to("cuda") 
-
-# Loss function (can stay on CPU, will auto-move)
-criterion = nn.MSELoss()
-
-# Optimizer
-baseLr = 0.001
-optimizer = optim.SGD(model.parameters(), lr=baseLr)  # Added momentum
-
-
-ROOT_PATH = 'Imgs'
-ANNOT_PATH = 'Imgs_Annotate.json'
-OUTPUT_PATH = 'trainPredPlots'
-#BATCH_SIZE = 256
 def savePreds(preds, label, it, da, def_size=96,outputPath="trainPredPlots",batchsize=64,printStatements=False):
     # for keys, values in imgAnnot.items():
     #     if keys == imgAnnot
@@ -240,52 +253,21 @@ def savePreds(preds, label, it, da, def_size=96,outputPath="trainPredPlots",batc
     
     plt.close()
 
-scaler = torch.amp.GradScaler("cuda")  # GradScaler for CUDA AMP
+testChinPointDataset = chinPointDataset(testImageFolder, None, idealWidth, idealHeight)
+testDataloader = DataLoader(
+    testChinPointDataset,
+    batch_size=36,
+    shuffle=True,
+    drop_last=True,
+    num_workers=0,
+    pin_memory=True,
+    persistent_workers=False
+)
+# Initialize model ON GPU
+model = chinPointNet().to("cuda") 
 
-if __name__ == "__main__":
-    with open("logs.txt", "a") as f:
-        f.write(f"Starting training; date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-    # training loop
-    for epoch in range(1000):
-        for batchIdx, (batchImg, batchGTAnnot) in enumerate(dataloader):
-            # forward
-            batchImg = batchImg.to("cuda", non_blocking=True)
-            batchGTAnnot = batchGTAnnot.to("cuda", non_blocking=True)
-            batchOutAnnot = model(batchImg)
-            loss = criterion(batchOutAnnot, batchGTAnnot)
-            optimizer.zero_grad(set_to_none=True)
-            with torch.autocast(device_type="cuda", dtype=torch.float16):
-                batchOutAnnot = model(batchImg)
-                loss = criterion(batchOutAnnot, batchGTAnnot)
 
-            scaler.scale(loss).backward()
-            scaler.step(optimizer)
-            scaler.update() 
-            
-        newLr = lrScheduler(baseLr, epoch)
-        for pg in optimizer.param_groups:
-            pg["lr"] = newLr
-        if epoch % 10 == 0:
-            print(f"Epoch {epoch}, Loss: {loss.item():.6f}, LR: {newLr:.6f}")
-            savePreds(batchOutAnnot,batchGTAnnot,epoch,batchImg)
-            testImg = next(iter(testDataloader))
-            #quick test to check 
-            testImg = testImg.to("cuda", non_blocking=True)
-            testOutAnnot = model(testImg)
-            savePreds(testOutAnnot,None,epoch,testImg,outputPath="testPredPlots",batchsize=36)
-            #logging
-            with open("logs.txt", "a") as f:
-                f.write(f"epoch: {epoch}; loss: {loss.item()}\n")
-            ###########
-            # testBatch = next(iter(testDataloader))
-            # print(f"Batch shape: {testBatch.shape}")
-            # print(f"Min: {testBatch.min()}, Max: {testBatch.max()}")
+batchTestImgs = next(iter(testDataloader))
 
-            # # Visualize directly
-            # fig, axes = plt.subplots(6, 6, figsize=(12, 12))
-            # for i, ax in enumerate(axes.flat):
-            #     ax.imshow(testBatch[i].squeeze().cpu().numpy(), cmap='gray')
-            #     ax.axis('off')
-            # plt.show()
-        if epoch % 50 == 0:
-            torch.save(model.state_dict(), f"modelCheckpoints/epoch_{epoch}.pth")#
+savePreds(preds=,label=None,it=0,da=batchTestImgs,def_size=96,outputPath="myTestPredPlots",batchsize=36,printStatements=False)
+

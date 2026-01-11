@@ -1,4 +1,15 @@
 learningLessons.md
 .ipynb_checkpoints/
+chinPointRegression.sty
+chinPointTesting.ipynb
+dictLearning.ipynb
+oldTestImgs/
+rawImgs/
+testImgs/
+testPredPlots/
+trainPredPlots/
+modelCheckpoints/
+Imgs/
+private/
 
 

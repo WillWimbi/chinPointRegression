@@ -67,13 +67,17 @@ iter = details['outputIter']
 i=0
 for file in os.listdir(rawImgs):
     i+=1
-    if oldDetails['rawImgsNum']>i:
-        continue
+    # if oldDetails['rawImgsNum']>i:
+    #     continue
+    
 
     xG,yG = 0,0
 
     full_path = os.path.join(rawImgs, file)
     image = cv2.imread(full_path)
+    if image.shape[0] < 100 or image.shape[1] < 100:
+        print(f"Image {file} is too small to be annotated, skipping")
+        continue
     winName = f"{file}, raw iter: {i}, tentative annot iter: {iter+1}"
     cv2.namedWindow(winName)
     cv2.moveWindow(winName, 1571,116)
