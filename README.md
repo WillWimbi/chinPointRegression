@@ -6,5 +6,5 @@ The model clearly has generalized quite strictly to the types of images presente
 Training Example: Red dots are predictions, Blue are ground truth:
 ![Training Example: Red dots are predictions, Blue are ground truth](trainImagesExample.png)
 
-Test Set Example: Red dots are predictions:
+Test Set Example: Red dots are predictions, doesn't generalize well enough:
 ![Test Set Example: Red dots are predictions](testImagesExample.png)
