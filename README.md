@@ -1,4 +1,4 @@
 This is a project I worked on over the summer when I was first learning about neural networks; the directory was bloated with tons of testing and oneoff scripts so I am cleaning it up and putting up a more barebones version here.
 
-![Description]("trainImagesExample.png")
-![Description]("ComfyUI_07791_.png")
+![Description](trainImagesExample.png)
+![Description](ComfyUI_07791_.png)
